@@ -5,9 +5,12 @@ import (
 	"log"
 	"os"
 
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/joho/godotenv"
 	"gopkg.in/gomail.v2"
 )
 
@@ -37,7 +40,10 @@ func handler(applicant Applicant) (string, error) {
 }
 
 func queryDatabase() error {
-	sess, err := session.NewSession()
+	sess, err := session.NewSession(&aws.Config{
+		Region:      aws.String("ap-southeast-1"),
+		Credentials: credentials.NewStaticCredentials(os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"), ""),
+	})
 	if err != nil {
 		return err
 	}
@@ -127,5 +133,10 @@ func sendMail(to string, subject string, applicant Applicant) error {
 
 func main() {
 	// lambda.Start(handler)
+	//Do not delete for testing locally
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
 	queryDatabase()
 }
