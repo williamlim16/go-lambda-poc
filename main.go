@@ -1,16 +1,18 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 
+	"github.com/aws/aws-lambda-go/events"
+	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/joho/godotenv"
+	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 	"gopkg.in/gomail.v2"
 )
 
@@ -26,64 +28,67 @@ type Applicant struct {
 	EmailTo string `json:"emailTo"`
 }
 
-func handler(applicant Applicant) (string, error) {
+type ApplicantRecord struct {
+	Name    string
+	Address string
+	Phone   string
+	Email   string
+	EmailTo string
+}
+
+func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	var applicant Applicant
+	err := json.Unmarshal([]byte(request.Body), &applicant)
+	if err != nil {
+		return events.APIGatewayProxyResponse{}, err
+	}
 
 	to := applicant.EmailTo
 	subject := "New applicant!"
 
-	err := sendMail(to, subject, applicant)
+	err = sendMail(to, subject, applicant)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
+	queryDatabase(applicant)
 
-	return "success", nil
+	response := events.APIGatewayProxyResponse{
+		StatusCode: 200,
+	}
+	return response, nil
 }
 
-func queryDatabase() error {
+func queryDatabase(applicant Applicant) error {
 	sess, err := session.NewSession(&aws.Config{
 		Region:      aws.String("ap-southeast-1"),
-		Credentials: credentials.NewStaticCredentials(os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"), ""),
+		Credentials: credentials.NewStaticCredentials(os.Getenv("KEY_ID"), os.Getenv("ACCESS_KEY"), ""),
 	})
 	if err != nil {
 		return err
 	}
 	svc := dynamodb.New(sess)
-	input := &dynamodb.ListTablesInput{}
 
-	fmt.Printf("Tables:\n")
-
-	for {
-		// Get the list of tables
-		result, err := svc.ListTables(input)
-		if err != nil {
-			if aerr, ok := err.(awserr.Error); ok {
-				switch aerr.Code() {
-				case dynamodb.ErrCodeInternalServerError:
-					fmt.Println(dynamodb.ErrCodeInternalServerError, aerr.Error())
-				default:
-					fmt.Println(aerr.Error())
-				}
-			} else {
-				// Print the error, cast err to awserr.Error to get the Code and
-				// Message from an error.
-				fmt.Println(err.Error())
-			}
-			return err
-		}
-
-		for _, n := range result.TableNames {
-			fmt.Println(*n)
-		}
-
-		// assign the last read tablename as the start for our next call to the ListTables function
-		// the maximum number of table names returned in a call is 100 (default), which requires us to make
-		// multiple calls to the ListTables function to retrieve all table names
-		input.ExclusiveStartTableName = result.LastEvaluatedTableName
-
-		if result.LastEvaluatedTableName == nil {
-			break
-		}
+	applicantRequest := ApplicantRecord(applicant)
+	av, err := dynamodbattribute.MarshalMap(applicantRequest)
+	if err != nil {
+		log.Fatalf("Got error marshalling new movie item: %s", err)
 	}
+
+	tableName := "Applicant"
+	fmt.Println(av)
+
+	input := &dynamodb.PutItemInput{
+		Item:      av,
+		TableName: aws.String(tableName),
+	}
+
+	_, err = svc.PutItem(input)
+	if err != nil {
+		log.Fatalf("Got error calling PutItem: %s", err)
+	}
+
+	fmt.Println("Successfully added '" + applicant.Email + " to " + tableName)
+
 	return nil
 }
 
@@ -132,11 +137,18 @@ func sendMail(to string, subject string, applicant Applicant) error {
 }
 
 func main() {
-	// lambda.Start(handler)
+	lambda.Start(handler)
 	//Do not delete for testing locally
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
-	queryDatabase()
+	// err := godotenv.Load()
+	// if err != nil {
+	// 	log.Fatal("Error loading .env file")
+	// }
+	// app := Applicant{
+	// 	Name:    "bob2",
+	// 	Address: "bob",
+	// 	Phone:   "01283212",
+	// 	Email:   "william16.lim@gmail.com",
+	// 	EmailTo: "william16.lim@gmail.com",
+	// }
+	// queryDatabase(app)
 }
