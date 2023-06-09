@@ -21,19 +21,23 @@ const CONFIG_SMTP_PORT = 587
 const CONFIG_SENDER_NAME = "Bro.Inc <william16.lim@gmail.com>"
 
 type Applicant struct {
-	Name    string `json:"name"`
-	Address string `json:"address"`
-	Phone   string `json:"phone"`
-	Email   string `json:"email"`
-	EmailTo string `json:"emailTo"`
+	Name       string `json:"name"`
+	Address    string `json:"address"`
+	Phone      string `json:"phone"`
+	Email      string `json:"email"`
+	EmailTo    string `json:"emailTo"`
+	Occupation string `json:"occupation"`
+	Company    string `json:"company"`
 }
 
 type ApplicantRecord struct {
-	Name    string
-	Address string
-	Phone   string
-	Email   string
-	EmailTo string
+	Name       string
+	Address    string
+	Phone      string
+	Email      string
+	EmailTo    string
+	Occupation string
+	Company    string
 }
 
 func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
@@ -43,10 +47,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		return events.APIGatewayProxyResponse{}, err
 	}
 
-	to := applicant.EmailTo
-	subject := "New applicant!"
-
-	err = sendMail(to, subject, applicant)
+	err = sendMail(applicant.EmailTo, "New applicant!", applicant)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
@@ -117,6 +118,22 @@ func sendMail(to string, subject string, applicant Applicant) error {
 		"</td>" +
 		"<td>" +
 		applicant.Email +
+		"</td>" +
+		"</tr>" +
+		"<tr>" +
+		"<td>" +
+		"Occupation" +
+		"</td>" +
+		"<td>" +
+		applicant.Occupation +
+		"</td>" +
+		"</tr>" +
+		"<tr>" +
+		"<td>" +
+		"Company" +
+		"</td>" +
+		"<td>" +
+		applicant.Company +
 		"</td>" +
 		"</tr>" +
 		"</table>"
